@@ -1,0 +1,268 @@
+---
+title: "Supplement to 'No clear or consistent evidence that wearing an eye mask leads to meaningful improvement in learning and alertness: A reanalysis of Greco et al. (2023)'"
+author: "Stephen Rhodes^[steverho89@gmail.com]"
+date: 'Last updated: `r Sys.Date()`'
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+# Code and R output
+
+Additional code for results not presented here is available at https://github.com/stephenrho/sleep/blob/main/reanalysis.Rmd
+
+```{r setup, include=T}
+knitr::opts_chunk$set(echo = T, warning = F, message = F)
+
+library(data.table)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(afex)
+
+theme_set(theme_bw())
+
+# get the data
+proj_url = "https://osf.io/q4p9v/"
+
+if (!dir.exists("data/")){
+  library(osfr)
+  dir.create("data/")
+  osf = osf_retrieve_node(proj_url)
+  osf_download(osf_ls_files(osf), recurse = T, path = "data/") 
+}
+
+readdat <- function(file){
+  # reshape the data
+  exp = ifelse(grepl("Experiment1", file), 1, 2)
+  
+  if (exp == 1){
+    dat = readxl::read_xlsx(file, skip = 1)
+    
+    stopifnot(all(colnames(dat) == c('Participants', 'YearOfExperiment', 
+                                     'Eyemask...3', 'ControlMask...4', 
+                                     'Eyemask...5', 'ControlMask...6')))
+    
+    dv_cols = paste(
+      rep(c("Eyemask", "Control"), 2), 
+      rep(c("day6", "day7"), each = 2), 
+      sep = "_"
+    )
+    
+    colnames(dat)[3:6] = dv_cols
+  } else{
+    dat = readxl::read_xlsx(file)
+    
+    stopifnot(all(colnames(dat) == c('Participants', 'YearOfExperiment', 
+                                     'Eyemask', 'ControlMask')))
+    dv_cols = c("Eyemask", "Control")
+    colnames(dat)[3:4] = dv_cols
+  }
+  
+  colnames(dat)[2] = "year"
+  
+  dat$ID = paste(dat$Participants, dat$year, sep = "_")
+  # wide to long
+  d = reshape2::melt(dat, id.vars = c("ID", "year"), measure.vars = dv_cols, variable.name = "condition", value.name = "y")
+  
+  d$eye_mask = as.numeric(grepl("Eyemask", d$condition))
+  
+  if (exp == 1){
+    d$day = ifelse(grepl("day7", d$condition), "day 7", "day 6")
+    d$day = as.factor(d$day)
+    d$condition = gsub("_day6|_day7", "", d$condition)
+  }
+  
+  d$condition = as.factor(d$condition)
+  d$year = as.factor(d$year)
+  
+  return(d)
+}
+
+pal1 = readdat("data/Tasks&Questionnaire/PAL/PAL_Experiment1.xlsx")
+pvt1 = readdat("data/Tasks&Questionnaire/PVT/PVT_Experiment1.xlsx")
+msl1 = readdat("data/Tasks&Questionnaire/MSL/MSL_Experiment1.xlsx")
+
+pal2 = readdat("data/Tasks&Questionnaire/PAL/PAL_Experiment2.xlsx")
+pvt2 = readdat("data/Tasks&Questionnaire/PVT/PVT_Experiment2.xlsx")
+```
+
+## Paired associates learning
+
+```{r PAL}
+### PAL (primary outcome) ----
+length(unique(pal1$ID))
+
+ggplot(pal1, aes(x = condition, y=y, group=ID)) + 
+  geom_line(alpha=1/2) + 
+  stat_summary(aes(x = condition, y=y, group=1), 
+               fun="mean", geom="line", inherit.aes = F, 
+               lwd=3, col="red") +
+  #facet_wrap(~day) + 
+  facet_grid(year ~ day) +
+  labs(x="Condition", y="PAL score", title="Experiment 1")
+
+aggregate(y ~ eye_mask, data = subset(pal1, day == "day 6"), FUN = mean)
+aggregate(y ~ eye_mask, data = subset(pal1, day == "day 7"), FUN = mean)
+aggregate(y ~ eye_mask, data = pal1, FUN = mean)
+
+# original model
+lmer(y ~ eye_mask + (1 | ID) + (1 | year), data = subset(pal1, day == "day 6"), 
+     REML = FALSE) |>
+  summary()
+
+# analysis reported in supplement
+pal1w = reshape2::dcast(pal1, formula = ... ~ day, value.var = "y")
+pal1w$y = pal1w$`day 6` - pal1w$`day 7`
+
+lmer(y ~ eye_mask + (1 | ID) + (1 | year), data = pal1w, 
+     REML = FALSE) |>
+  summary()
+
+# note: in both cases there is a singular fit warning
+# most likely trying to estimate random effect for 2 groups...
+
+# more appropriate model
+# (1) analyze the data from the PAL task as a whole.
+# no need to separate days.
+# (2) account for ID level variability in difference 
+# between eye mask and control
+# (3) year = different control conditions, so should account 
+# for *interaction* between eye mask and year 
+# doesn't make sense to include year as random effect
+
+# make contrast for year and day sum to zero so coefficient 
+# for mask is at 'average' year
+contrasts(pal1$year) = c(-1,1)
+contrasts(pal1$day) = c(-1,1) 
+mod = lmer(y ~ eye_mask + year + day + eye_mask:year + eye_mask:day + 
+             (1 + eye_mask + day | ID), 
+           data = pal1, REML = FALSE) 
+
+summary(mod)
+confint(mod)
+# some warnings but profile plots/zeta diagrams look ok 
+# https://stackoverflow.com/questions/74018300/warnings-when-computing-confidence-intervals-using-confint-for-linear-growth-mod
+# pp = profile(mod)
+# lattice::xyplot(pp)
+
+# mixed ANOVA (note: tests extra interactions)
+aov_car(y ~ condition*year*day + Error(ID/(condition*day)), 
+        data = pal1, fun_aggregate = mean)
+
+# Experiment 2
+# n unique IDs don't match N = 33 reported in paper
+length(unique(pal2$ID))
+
+aggregate(y ~ condition, pal2, mean)
+# the means match though...
+
+ggplot(pal2, aes(x = condition, y=y, group=ID)) + 
+  geom_line(alpha=1/2) + 
+  stat_summary(aes(x = condition, y=y, group=1), 
+               fun="mean", geom="line", inherit.aes = F, 
+               lwd=3, col="red") +
+  labs(x="Condition", y="PAL score", title="Experiment 2")
+
+# recreate original analysis
+mod = lmer(y ~ eye_mask + (1  | ID), data = pal2, REML = F)
+
+summary(mod)
+confint(mod)
+
+aov_car(y ~ condition + Error(ID/condition), data = pal2, fun_aggregate = mean)
+
+```
+
+## Psychomotor vigilance test
+
+```{r PVT}
+### PVT ----
+length(unique(pvt1$ID))
+
+ggplot(pvt1, aes(x = condition, y=y, group=ID)) + 
+  geom_line(alpha=1/2) + 
+  stat_summary(aes(x = condition, y=y, group=1), 
+               fun="mean", geom="line", inherit.aes = F, 
+               lwd=3, col="red") +
+  #facet_wrap(~day) + 
+  facet_grid(year ~ day) +
+  labs(x="Condition", y="PVT RT (ms)", title="Experiment 1")
+
+# this matches reported means (but figure 2b means look different?)
+aggregate(y ~ eye_mask, data = pvt1, FUN = mean)
+
+# original model
+lmer(y ~ eye_mask + (1 | ID) + (1 | year), data = pvt1, REML = FALSE) |>
+  summary()
+# note: boundary (singular) fit: see help('isSingular') 
+
+# more appropriate model
+contrasts(pvt1$year) = c(-1,1)
+mod = lmer(y ~ eye_mask*year + (1 + eye_mask | ID), data = pvt1, REML = FALSE) 
+
+summary(mod)
+confint(mod)
+
+# mixed ANOVA (averages day 6 and 7)
+aov_car(y ~ condition*year + Error(ID/condition), 
+        data = pvt1, fun_aggregate = mean)
+
+# Experiment 2
+# also 28, not 33
+length(unique(pvt2$ID))
+
+ggplot(pvt2, aes(x = condition, y=y, group=ID)) + 
+  geom_line(alpha=1/2) + 
+  stat_summary(aes(x = condition, y=y, group=1), 
+               fun="mean", geom="line", inherit.aes = F, 
+               lwd=3, col="red") +
+  labs(x="Condition", y="PVT RT (ms)", title="Experiment 2")
+
+aggregate(y ~ condition, pvt2, mean)
+
+aov_car(y ~ condition + Error(ID/condition), data = pvt2, fun_aggregate = mean)
+
+lmer(y ~ eye_mask + (1  | ID), data = pvt2, REML = F) |>
+  summary()
+
+```
+
+```{r MSL, include=F}
+# Motor-Skill Learning
+
+# change include to T above to include this analysis
+
+### MSL ----
+length(unique(msl1$ID))
+
+ggplot(msl1, aes(x = condition, y=y, group=ID)) + 
+  geom_line(alpha=1/2) + 
+  stat_summary(aes(x = condition, y=y, group=1), 
+               fun="mean", geom="line", inherit.aes = F, 
+               lwd=3, col="red") +
+  #facet_wrap(~day) + 
+  facet_grid(year ~ day) +
+  labs(x="Condition", y="MSL Score", title="Experiment 1")
+
+aggregate(y ~ eye_mask, data = msl1, FUN = mean)
+
+# original model
+lmer(y ~ eye_mask + (1 | ID) + (1 | year), data = msl1, REML = FALSE) |>
+  summary()
+
+# actually this is the model reported...
+lmer(y ~ eye_mask*day + (1 | ID) + (1 | year), data = msl1, REML = FALSE) |>
+  summary()
+# interpretation in the paper is that people get 
+# better after sleep. Also probably practice
+
+# more appropriate model
+lmer(y ~ eye_mask*year + (1 + eye_mask | ID), data = msl1, REML = FALSE) |>
+  summary()
+
+# mixed ANOVA (averages day 6 and 7)
+aov_car(y ~ condition*year + Error(ID/condition), data = msl1, fun_aggregate = mean)
+```
+
