@@ -4,8 +4,6 @@ author: "Stephen Rhodes^[steverho89@gmail.com. Journal version (paywalled): http
 date: 'Last updated: `r Sys.Date()`'
 output:
   pdf_document: default
-  html_document: default
-  word_document: default
 ---
 
 Greco et al.$^{[1]}$, in the "Statement of significance" section, claim that their findings suggest that "[...] wearing an eye mask during sleep is an effective, economical, and noninvasive behavior that could benefit cognitive function and lead to measurable impacts on everyday life." Here we examine some of the analysis choices made in this article and critically assess this claim. Firstly, Greco et al. should be applauded for clearly stating their analysis model and for publicly sharing their data (https://osf.io/q4p9v/), which made this reanalysis possible.
@@ -45,11 +43,15 @@ So what are we to make of the effects of eye masks on cognition? When reassessin
 
 Even if we were to take these improved estimates at face value it is difficult to imagine how being able to, on average, remember 0 to 2 (the 95% CI around the `eye_mask` effect) extra words out of 80 or being able to respond 0.1 to 12 milliseconds faster after wearing an eye mask could lead to measurable impacts on everyday life.
 
-(1180 words)
+# Response to the Response
 
-<!-- # Disclosures -->
+Greco et al. responded to this commentary (https://doi.org/10.1093/sleep/zsad148) and I thank them for taking the time to do so. Here are responses to some specific points:
 
-<!-- None -->
+- The first paragraph gives a rationale for splitting day 6 and 7 scores for the PAL task. I don't dispute the logic but what isn't addressed is the obvious effect this has on the type I error rate for the test of 'mask effects on memory performance'. Also not addressed is the point (in the first footnote above) that a similar analysis of change is presented in the supplement for the motor learning task but a different analysis, including both day 6 and 7 data, was reported in the main paper. Therefore, we know that at least this task was looked at multiple ways. This doesn't mean that all tasks were analyzed multiple ways (researcher degrees of freedom) but preregistration would have been useful here.
+- Greco et al. point out that the year\*eye_mask interaction does not significantly improve model fit according to a likelihood ratio test. This isn't really a surprise given that the coefficient wasn't significant in the reanalysis. I would argue that the interaction should be included *irrespective* of whether it significantly improves model fit. This is to account for even slight variability in the size of any 'mask effect' by year. Not including this in the model fixes it to be zero and that seems a strong assumption (and one not justifiable on the basis of p > 0.05).
+- The reanalysis of the PVT task is said to have strengthened confidence in that finding. However, what is not addressed is the point that raw data for the PVT task are not available on the OSF. Not accounting for trial level variability in response times and variability in the number of responses available means that the standard errors (and, therefore, p-values) are likely too small. This should not strengthen confidence.
+- In the final paragraph Greco et al. argue that being able to respond even a few milliseconds faster or remember one or two extra words *could* have huge implications. I suppose... but this focuses on the point estimates and ignores the fact that the 95% confidence intervals include differences that any rational reader would consider meaningless. Establishing the impact of wearing eye masks during sleep on cognition is clearly going to take more work (and more convincing treatment effect estimates). It also takes a large leap to assume that an RT difference in a lab task would translate to a similar RT difference in a 'real world' scenario, like driving.
+- The above point only matters if we take the estimates seriously. As argued in the letter above, there are participants omitted from analysis, for various reasons, leading to the possibility that the design is imbalanced. If, for example, more participants completed the eye mask condition second then some/all of the performance difference could reflect practice, having done the tasks before. This, surprisingly, was not addressed in the response.
 
 # References
 
